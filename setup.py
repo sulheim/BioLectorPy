@@ -8,6 +8,7 @@ setup(
     name='BioLectorPy',
     version='0.1.0',    
     description='A Python package for plotting BioLector results',
+    long_description = read('README.md'),
     url='https://github.com/sulheim/biolector',
     author='Snorre sulheim',
     author_email='ssulheim@gmail.com',
@@ -24,7 +25,7 @@ setup(
         'Intended Audience :: Science/Research',
         'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',  
         'Operating System :: POSIX :: Linux',
-        'Operating System :: Microsoft :: Windows'        
+        'Operating System :: Microsoft :: Windows',      
         'Programming Language :: Python :: 3',
     ],
 )
