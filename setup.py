@@ -1,19 +1,20 @@
 import os
-from setuptools import setup
+from setuptools import setup, find_packages
 
-def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
 
 setup(
     name='BioLectorPy',
     version='0.1.0',    
     description='A Python package for plotting BioLector results',
-    long_description = read('README.md'),
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     url='https://github.com/sulheim/biolector',
     author='Snorre sulheim',
     author_email='ssulheim@gmail.com',
     license='GPL-3.0',
-    packages=['BioLector'],
+    packages=find_packages(where="src", include=["BioLector"]),
     install_requires=['pandas',                     
                       'seaborn',
                       'matplotlib',
