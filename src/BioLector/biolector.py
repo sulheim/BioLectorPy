@@ -31,11 +31,11 @@ well_N_to_fig_shape = {
 }
 
 class PlotResults(object):
-    def __init__(self, data_fn, wellmap_fn, fig_folder, experiment_name = None, pro_version = False):
+    def __init__(self, data_fn, wellmap_fn, fig_folder, experiment_name = None, pro_version = False, delimiter = ";"):
         self._set_pro_version(pro_version)
         self.parse_data(data_fn)
         self.parse_channel_info(data_fn)
-        self.parse_wellmap(wellmap_fn)
+        self.parse_wellmap(wellmap_fn, delimiter)
         self._set_fig_folder(fig_folder)
         self.experiment_name = experiment_name
         self._set_wellplate_shape()
@@ -92,9 +92,9 @@ class PlotResults(object):
             self.df["Parameter"] = self.df[self.keep_columns[1]].str[4:]
         # print(self.df.head())
 
-    def parse_wellmap(self, wellmap_fn):
+    def parse_wellmap(self, wellmap_fn, delimiter = ";"):
         dtype_dict = {"Well": str, "Strain": str, "Medium":str, "Replicate": int}
-        self.df_wellmap = pd.read_csv(wellmap_fn, header = 0, dtype = dtype_dict, sep = None)
+        self.df_wellmap = pd.read_csv(wellmap_fn, header = 0, dtype = dtype_dict, sep = delimiter)
         self.df_wellmap.Medium.fillna('', inplace = True)
         self.df = self.df.merge(self.df_wellmap, how='inner', left_on=self.well_column_name, right_on='Well')
 
@@ -115,7 +115,7 @@ class PlotResults(object):
         df_i = self.df.loc[idx, :]
         
         fig, ax = plt.subplots(1, figsize = (12, 8))
-        sns.lineplot(data = df_i, x = "Time [h]", y = "value", hue = "Medium", ax = ax, ci = ci_def, units = units, estimator = None)
+        sns.lineplot(data = df_i, x = "Time [h]", y = "value", hue = "Medium", ax = ax, ci = ci, units = units, estimator = None)
         ax.set(ylabel = gain_id)
         ax.set_title(strain_name)
         if confidence_range:
