@@ -96,9 +96,26 @@ class PlotResults(object):
         dtype_dict = {"Well": str, "Strain": str, "Medium":str, "Replicate": int}
         self.df_wellmap = pd.read_csv(wellmap_fn, header = 0, dtype = dtype_dict, sep = delimiter)
         self.df_wellmap.Medium.fillna('', inplace = True)
-        self.df = self.df.merge(self.df_wellmap, how='inner', left_on=self.well_column_name, right_on='Well')
 
-    def plot_strain_growth(self, strain_name, gain_id = "Biomass - 30", fig_format = "svg", show = False, ci = 95, confidence_range = True):
+        # Contamination
+        if not "Contamination" in self.df_wellmap.columns:
+            self.df_wellmap["Contamination"] = False
+        else:
+            self.df_wellmap.Contamination.fillna(False, inplace = True)
+            self.df_wellmap.Contamination = self.df_wellmap.Contamination.astype(bool)
+
+        self.df = self.df.merge(self.df_wellmap, how='inner', left_on=self.well_column_name, right_on='Well')
+        
+    def plot_multiple_strains(self, strain_names = None, media = None):
+        """
+        Compare multiple strains in the same plot, with the option of seing different media conditions as different line styles. 
+        """
+        pass
+
+    def plot_strain_growth(self, strain_name, gain_id = "Biomass - 30", fig_format = "svg", show = False, ci = 95, confidence_range = True, remove_contaminants = True):
+        """
+        Plot the measured growth for all medium (conditions) for one strain / species
+        """
         # First check the parameter value (gain id)
         if not self.check_parameter(gain_id):
             print("Could not plot strain growth - wrong biomass ID")
@@ -113,9 +130,12 @@ class PlotResults(object):
 
         idx = (self.df["Parameter"] == gain_id) & (self.df["Strain"]==strain_name)
         df_i = self.df.loc[idx, :]
+
+        if remove_contaminants:
+            df_i = df_i.loc[~df_i.Contamination, :]
         
         fig, ax = plt.subplots(1, figsize = (12, 8))
-        sns.lineplot(data = df_i, x = "Time [h]", y = "value", hue = "Medium", ax = ax, ci = ci, units = units, estimator = None)
+        sns.lineplot(data = df_i, x = "Time [h]", y = "value", hue = "Medium", ax = ax, ci = ci, units = units, estimator = estimator)
         ax.set(ylabel = gain_id)
         ax.set_title(strain_name)
         if confidence_range:
@@ -127,7 +147,10 @@ class PlotResults(object):
         plt.close()
         return True
 
-    def plot_all_strains_growth(self, gain_id = "Biomass - 50", fig_format = "svg", confidence_range = True):
+    def plot_all_strains_growth(self, gain_id = "Biomass - 50", fig_format = "svg", confidence_range = True, remove_contaminants = False):
+        """
+        Wrapper for the `plot_stain_growth` function that performs this action for all strains.
+        """
         # First check the parameter value (gain id)
         if not self.check_parameter(gain_id):
             print("Could not plot strain growth")
@@ -153,7 +176,7 @@ class PlotResults(object):
             return True
 
     def plot_wellplate(self, gain_id = "Biomass - 50", fig_format = "svg", show = False, 
-                        rolling_mean_window = 5, fold_change_ref = ("min", "max")):
+                        rolling_mean_window = 5, fold_change_ref = ("min", "max"), remove_contaminants = True):
         """
         Provide a wellplate plot showing the fold change.
         - rolling_mean_window: Indicate the window size of a moving average used to smooth the data to reduce noise
@@ -178,9 +201,14 @@ class PlotResults(object):
             for j in self.plate_cols:
                 well_id = "{0}0{1}".format(a, j)
                 strain = list(df_i.loc[df_i["Well"]==well_id, "Strain"])[0]
+                contaminated = self.df_wellmap.Contamination[self.df_wellmap.Well==well_id].values[0]
                 if not isinstance(strain, str):
                     text = "Empty"
                     ax.scatter(j, 6-i, s = 3.2e3, c = "w", vmin = 1, edgecolor = "k", linewidth = 1)
+                elif contaminated:
+                    text = "Contamination"
+                    ax.scatter(j, 6-i, s = 3.2e3, c = "w", vmin = 1, edgecolor = "r", linewidth = 1)
+
                 else:
                     medium = list(df_i.loc[df_i["Well"]==well_id, "Medium"])[0]
                     fold_change = _get_fold_change(df_i.loc[df_i["Well"]==well_id, "value"], 
@@ -210,6 +238,9 @@ class PlotResults(object):
         return True
 
     def plot_individual_well_data(self, strain_name, gain_id = "Biomass - 30", fig_format = "svg", show = False, pH_range = (6,8), DO_range = (50, 100)):
+        """
+        Plot DO, pH and Biomass for each well.
+        """
         # First check the parameter value (gain id)
         if not self.check_parameter(gain_id):
             print("Could not individual well data")
