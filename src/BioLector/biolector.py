@@ -32,13 +32,18 @@ well_N_to_fig_shape = {
 
 class PlotResults(object):
     def __init__(self, data_fn, wellmap_fn, fig_folder, experiment_name = None, pro_version = False, delimiter = ";"):
-        self._set_pro_version(pro_version)
-        self.parse_data(data_fn)
-        self.parse_channel_info(data_fn)
-        self.parse_wellmap(wellmap_fn, delimiter)
-        self._set_fig_folder(fig_folder)
+        # Store variables
+        self.data_fn = data_fn
+        self.delimiter = delimiter
         self.experiment_name = experiment_name
+        self._set_fig_folder(fig_folder)
+
+        # Initialize data
+        self._set_pro_version(pro_version)
+        self.df = self.parse_data(data_fn)
+        self.df, self.df_wellmap = self.add_wellmap_data(wellmap_fn, self.df, delimiter)
         self._set_wellplate_shape()
+        self._add_experiment_name(experiment_name, self.df)
 
     def _set_pro_version(self, pro_version):
         self.pro_version = pro_version
@@ -58,6 +63,7 @@ class PlotResults(object):
             self.keep_columns = ["WELL No.", "CHANNEL"]
             self.pH_key = 'Cal.pH [-]:FS=1'
             self.DO_key = 'Cal.pO2 [-]:FS=2'
+    
 
     def _set_fig_folder(self, path):
         self.fig_folder = Path(path)
@@ -67,44 +73,64 @@ class PlotResults(object):
         self.plate_rows = ['A','B','C','D','E','F']
         self.plate_cols = range(1, 9)
 
-    def parse_data(self, data_fn):
-        df = pd.read_excel(data_fn, sheet_name=self.sheet_name, skiprows=self.skiprows)
-        df.columns = list(df.columns[:4])+list(df.iloc[1, 4:])
-        df = df.loc[df[self.well_column_name].notna(), :]
-        df.drop(columns = self.drop_columns, inplace = True)
-        self.raw_df = df
-        self.df = pd.melt(df, id_vars=self.keep_columns, var_name="Time [h]")
+    def _add_experiment_name(self, experiment_name, df):
+        df["Experiment"] = experiment_name
 
-    def parse_channel_info(self, data_fn):
-        # Parsing channel info from seperate tble for the "standard" BioLector version
+
+    def parse_data(self, data_fn):
+        # Parse the excel sreadsheet with biolector data
+        wide_df = pd.read_excel(data_fn, sheet_name=self.sheet_name, skiprows=self.skiprows)
+        wide_df.columns = list(wide_df.columns[:4])+list(wide_df.iloc[1, 4:])
+        wide_df = wide_df.loc[wide_df[self.well_column_name].notna(), :]
+        wide_df.drop(columns = self.drop_columns, inplace = True)
+        df = pd.melt(wide_df, id_vars=self.keep_columns, var_name="Time [h]")
+
+        # Get channel info from spreadsheet header 
+        self.parse_channel_info(data_fn, df)
+        return df
+
+    def parse_channel_info(self, data_fn, df):
+        # Parsing channel info from seperate table for the "standard" BioLector version
         if not self.pro_version:
             df_channel = pd.read_excel(data_fn, sheet_name=self.sheet_name, skiprows=12, usecols = "A, B, G", nrows=5, index_col = 0)
             df_channel["FILTERNAME"] = df_channel["FILTERNAME"].str.strip()
             self.channel_map = df_channel[['FILTERNAME', 'GAIN']].astype(str).agg(' - '.join, axis=1).to_dict()
             parameters = []
-            for i, x in enumerate(list(self.df["CHANNEL"])):
+            for i, x in enumerate(list(df["CHANNEL"])):
                 try:
                     parameters.append(self.channel_map[x])
                 except KeyError:
                     parameters.append(x)
-            self.df["Parameter"] = parameters
+            df["Parameter"] = parameters
         else:
-            self.df["Parameter"] = self.df[self.keep_columns[1]].str[4:]
+            df["Parameter"] = df[self.keep_columns[1]].str[4:]
         # print(self.df.head())
 
-    def parse_wellmap(self, wellmap_fn, delimiter = ";"):
+    def add_experiment(self, data_fn, wellmap_fn, experiment_name, time_adjustment = 0):
+        """
+        Add data from another experiment to the data frame
+        """
+        new_df = self.parse_data(data_fn)
+        new_df, df_wellmap = self.add_wellmap_data(wellmap_fn, new_df, self.delimiter)
+        self._add_experiment_name(experiment_name, new_df)
+
+        self.df = self.df.append(new_df, ignore_index = True)
+
+
+    def add_wellmap_data(self, wellmap_fn, df, delimiter = ";"):
         dtype_dict = {"Well": str, "Strain": str, "Medium":str, "Replicate": int}
-        self.df_wellmap = pd.read_csv(wellmap_fn, header = 0, dtype = dtype_dict, sep = delimiter)
-        self.df_wellmap.Medium.fillna('', inplace = True)
+        df_wellmap = pd.read_csv(wellmap_fn, header = 0, dtype = dtype_dict, sep = delimiter)
+        df_wellmap.Medium.fillna('', inplace = True)
 
         # Contamination
-        if not "Contamination" in self.df_wellmap.columns:
-            self.df_wellmap["Contamination"] = False
+        if not "Contamination" in df_wellmap.columns:
+            df_wellmap["Contamination"] = False
         else:
-            self.df_wellmap.Contamination.fillna(False, inplace = True)
-            self.df_wellmap.Contamination = self.df_wellmap.Contamination.astype(bool)
+            df_wellmap.Contamination.fillna(False, inplace = True)
+            df_wellmap.Contamination = df_wellmap.Contamination.astype(bool)
 
-        self.df = self.df.merge(self.df_wellmap, how='inner', left_on=self.well_column_name, right_on='Well')
+        df = df.merge(df_wellmap, how='inner', left_on=self.well_column_name, right_on='Well')
+        return df, df_wellmap
         
     def plot_multiple_strains(self, strain_names = None, media = None):
         """
@@ -112,7 +138,7 @@ class PlotResults(object):
         """
         pass
 
-    def plot_strain_growth(self, strain_name, gain_id = "Biomass - 30", fig_format = "svg", show = False, ci = 95, confidence_range = True, remove_contaminants = True):
+    def plot_strain_growth(self, strain_name, gain_id = "Biomass - 30", fig_format = "svg", show = False, ci = 95, confidence_range = True, remove_contaminants = True, per_media = False):
         """
         Plot the measured growth for all medium (conditions) for one strain / species
         """
@@ -120,6 +146,10 @@ class PlotResults(object):
         if not self.check_parameter(gain_id):
             print("Could not plot strain growth - wrong biomass ID")
             return False
+        # Check strain name
+        strains = self.df.Strain.unique()
+        if not strain_name in strains:
+            print("The provided strain name ({0}) is not in the list of strains: {1}".format(strain_name, strains))
 
         if confidence_range:
             units = None
@@ -134,18 +164,76 @@ class PlotResults(object):
         if remove_contaminants:
             df_i = df_i.loc[~df_i.Contamination, :]
         
-        fig, ax = plt.subplots(1, figsize = (12, 8))
-        sns.lineplot(data = df_i, x = "Time [h]", y = "value", hue = "Medium", ax = ax, ci = ci, units = units, estimator = estimator)
-        ax.set(ylabel = gain_id)
-        ax.set_title(strain_name)
-        if confidence_range:
-            fig.text(0.1, 0.01, "Shaded regions display {0}% CI".format(ci))
-        fn = self.fig_folder / "{0}_{1}.{2}".format(strain_name, gain_id, fig_format)
-        fig.savefig(fn)
-        if show:
-            plt.show()
-        plt.close()
+        # Handle multiple experiments
+        n_experiments = len(self.df.Experiment.unique())
+        if not per_media:
+            hue = "Medium"
+            if n_experiments > 1:
+                style = "Experiment"
+            else:
+                style = None
+        else:
+            style = None
+            if n_experiments > 1:
+                hue = "Experiment"
+            else:
+                hue = None
+
+
+        # Set basis style
+        if per_media:
+            different_media = df_i.Medium.unique()
+            # Make one seperate figure per medium condition
+            for medium in different_media:
+                idx = df_i.Medium == medium
+                df_j = df_i.loc[idx, :]
+                fig, ax = plt.subplots(1, figsize = (14, 8))
+                graph = sns.lineplot(data = df_j, x = "Time [h]", y = "value", hue = hue, ax = ax, ci = ci, units = units, estimator = estimator, style = style)
+
+                # Move legend outside plot
+                graph.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+                plt.subplots_adjust(left = 0.07, right = 0.8, top = 0.9)
+                # plt.tight_layout()
+                # plt.subplots_adjust(top = 0.9)
+
+                # Style graph
+                ax.set(ylabel = gain_id)
+                ax.set_title("{0} - {1}".format(strain_name, medium))
+                if confidence_range:
+                    fig.text(0.1, 0.01, "Shaded regions display {0}% CI".format(ci))
+                fn = self.fig_folder / "{0}_{1}_{3}.{2}".format(strain_name, gain_id, fig_format, medium)
+                fig.savefig(fn)
+                if show:
+                    plt.show()
+                plt.close()
+
+
+        else:
+            fig, ax = plt.subplots(1, figsize = (14, 8))
+            graph = sns.lineplot(data = df_i, x = "Time [h]", y = "value", hue = hue, ax = ax, ci = ci, units = units, estimator = estimator, style = style)
+
+            # Move legend outside plot
+            graph.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+            plt.subplots_adjust(left = 0.07, right = 0.75, top = 0.9)
+            # plt.subplots_adjust(top = 0.9)
+            # plt.tight_layout()
+
+            # Style graph
+            ax.set(ylabel = gain_id)
+            ax.set_title(strain_name)
+            if confidence_range:
+                fig.text(0.1, 0.01, "Shaded regions display {0}% CI".format(ci))
+            fn = self.fig_folder / "{0}_{1}.{2}".format(strain_name, gain_id, fig_format)
+            fig.savefig(fn)
+            if show:
+                plt.show()
+            plt.close()
+
         return True
+
+
+
+    
 
     def plot_all_strains_growth(self, gain_id = "Biomass - 50", fig_format = "svg", confidence_range = True, remove_contaminants = False):
         """
