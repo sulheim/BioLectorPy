@@ -53,16 +53,16 @@ class PlotResults(object):
             self.skiprows = 23
             self.drop_columns = ["Description", "Content"]
             self.keep_columns = ["Well", "Channel"]
-            self.pH_key = 'Cali.pH(HP8) Gain=7'
-            self.DO_key = 'Cali.DO(PSt3) Gain=7'
+            self.pH_key_basis = 'Cali.pH'
+            self.DO_key_basis = 'Cali.DO'
         else:
             self.sheet_name = "raw_data"
             self.well_column_name = "WELL No."
             self.skiprows = 22
             self.drop_columns = ["DESCRIPTION", "CONTENT"]
             self.keep_columns = ["WELL No.", "CHANNEL"]
-            self.pH_key = 'Cal.pH [-]:FS=1'
-            self.DO_key = 'Cal.pO2 [-]:FS=2'
+            self.pH_key_basis = 'Cal.pH'
+            self.DO_key_basis = 'Cal.pO2'
     
 
     def _set_fig_folder(self, path):
@@ -87,7 +87,19 @@ class PlotResults(object):
 
         # Get channel info from spreadsheet header 
         self.parse_channel_info(data_fn, df)
+        
+        # # Replace DO and pH labels
+        self._replace_pH_DO_parameter_label(df)
+
         return df
+
+    def _replace_pH_DO_parameter_label(self, df):
+        # Replace pH
+        df['Parameter'] = df['Parameter'].str.replace('{0}.+'.format(self.pH_key_basis), 'pH', regex = True)
+
+        # Replace DO
+        df['Parameter'] = df['Parameter'].str.replace('{0}.+'.format(self.DO_key_basis), 'DO', regex = True)
+        
 
     def parse_channel_info(self, data_fn, df):
         # Parsing channel info from seperate table for the "standard" BioLector version
@@ -192,7 +204,7 @@ class PlotResults(object):
 
                 # Move legend outside plot
                 graph.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-                plt.subplots_adjust(left = 0.07, right = 0.8, top = 0.9)
+                plt.subplots_adjust(left = 0.07, right = 0.75, top = 0.9)
                 # plt.tight_layout()
                 # plt.subplots_adjust(top = 0.9)
 
@@ -367,7 +379,7 @@ class PlotResults(object):
 
                     # Plot pH
                     ax2 = ax.twinx()
-                    pH_idx = df_well["Parameter"] == self.pH_key
+                    pH_idx = df_well["Parameter"] == 'pH'
                     df_pH = df_well.loc[pH_idx, :]
                     l2, = ax2.plot(df_pH["Time [h]"], df_pH["value"], label = "pH", c = "b")
 
@@ -376,7 +388,7 @@ class PlotResults(object):
                     ax3.spines["right"].set_position(("axes", 1.3))
                     _make_patch_spines_invisible(ax3)
 
-                    DO_idx = df_well["Parameter"] == self.DO_key
+                    DO_idx = df_well["Parameter"] == 'DO'
                     df_DO = df_well.loc[DO_idx, :]
                     l3, = ax3.plot(df_DO["Time [h]"], df_DO["value"], label = "pO2", c = "r")
 
