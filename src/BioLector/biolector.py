@@ -126,6 +126,11 @@ class PlotResults(object):
         new_df, df_wellmap = self.add_wellmap_data(wellmap_fn, new_df, self.delimiter)
         self._add_experiment_name(experiment_name, new_df)
 
+        # Add time adjustment
+        if time_adjustment:
+            new_df["Time adjustment"] = time_adjustment
+            new_df["Time [h]"] += time_adjustment
+
         self.df = self.df.append(new_df, ignore_index = True)
 
 
@@ -150,7 +155,20 @@ class PlotResults(object):
         """
         pass
 
-    def plot_strain_growth(self, strain_name, gain_id = "Biomass - 30", fig_format = "svg", show = False, ci = 95, confidence_range = True, remove_contaminants = True, per_media = False):
+    def get_cultivation_data(self, strain_name, gain_id, medium = None, remove_contaminants = True):
+        idx = (self.df["Parameter"] == gain_id) & (self.df["Strain"]==strain_name)
+
+        if medium:
+            idx = idx & (self.df["Medium"]==medium)
+
+        df_i = self.df.loc[idx, :]
+
+        if remove_contaminants:
+            df_i = df_i.loc[~df_i.Contamination, :]
+
+        return df_i
+
+    def plot_strain_growth(self, strain_name, gain_id = "Biomass - 30", fig_format = "svg", show = False, ci = 95, confidence_range = True, remove_contaminants = True, per_media = False, hue = "Medium", style = "Experiment", figsize = (14,8)):
         """
         Plot the measured growth for all medium (conditions) for one strain / species
         """
@@ -177,29 +195,34 @@ class PlotResults(object):
             df_i = df_i.loc[~df_i.Contamination, :]
         
         # Handle multiple experiments
-        n_experiments = len(self.df.Experiment.unique())
-        if not per_media:
-            hue = "Medium"
-            if n_experiments > 1:
-                style = "Experiment"
-            else:
-                style = None
-        else:
-            style = None
-            if n_experiments > 1:
-                hue = "Experiment"
-            else:
-                hue = None
+        # Will be deprecated
+        # n_experiments = len(self.df.Experiment.unique())
+        # if not per_media:
+        #     hue = "Medium"
+        #     if n_experiments > 1:
+        #         style = "Experiment"
+        #     else:
+        #         style = None
+        # else:
+        #     style = None
+        #     if n_experiments > 1:
+        #         hue = "Experiment"
+        #     else:
+        #         hue = None
+
 
 
         # Set basis style
         if per_media:
+            if hue == "Medium":
+                hue = style
+                style = None
             different_media = df_i.Medium.unique()
             # Make one seperate figure per medium condition
             for medium in different_media:
                 idx = df_i.Medium == medium
                 df_j = df_i.loc[idx, :]
-                fig, ax = plt.subplots(1, figsize = (14, 8))
+                fig, ax = plt.subplots(1, figsize = figsize)
                 graph = sns.lineplot(data = df_j, x = "Time [h]", y = "value", hue = hue, ax = ax, ci = ci, units = units, estimator = estimator, style = style)
 
                 # Move legend outside plot
@@ -221,7 +244,7 @@ class PlotResults(object):
 
 
         else:
-            fig, ax = plt.subplots(1, figsize = (14, 8))
+            fig, ax = plt.subplots(1, figsize = figsize)
             graph = sns.lineplot(data = df_i, x = "Time [h]", y = "value", hue = hue, ax = ax, ci = ci, units = units, estimator = estimator, style = style)
 
             # Move legend outside plot
@@ -245,9 +268,7 @@ class PlotResults(object):
 
 
 
-    
-
-    def plot_all_strains_growth(self, gain_id = "Biomass - 50", fig_format = "svg", confidence_range = True, remove_contaminants = False):
+    def plot_all_strains_growth(self, gain_id = "Biomass - 50", fig_format = "svg", confidence_range = True, remove_contaminants = False, hue = "Medium", style = "Experiment", figsize = (14,8)):
         """
         Wrapper for the `plot_stain_growth` function that performs this action for all strains.
         """
@@ -261,7 +282,8 @@ class PlotResults(object):
             if not isinstance(strain, str):
                 continue
             print(strain)
-            self.plot_strain_growth(strain, gain_id, fig_format, confidence_range = confidence_range)
+            self.plot_strain_growth(strain, gain_id, fig_format, confidence_range = confidence_range, hue = hue,
+                                    style = style, figsize = figsize)
         return True
     def print_parameters(self):
         print("Possible parameters: {0}".format(self.df["Parameter"].unique()))
