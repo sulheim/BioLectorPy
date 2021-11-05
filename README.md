@@ -13,6 +13,10 @@ Current features include:
 # Installation
 pip install BioLectorPy
 
+# Gallery
+<img src="./gallery/Biomass - 30_S. enterica-E. coli_Glucose-NAG.svg">
+<img src="./gallery/wellplate_Biomass - 30.svg">
+
 # Contribution
 Feel free to contribute by rasing issues or PRs, or reach out to me directly at snorre.sulheim@sintef.no
 
