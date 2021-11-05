@@ -2,6 +2,7 @@
 This package is used to plot results from cultivations in a BioLector. This is an ongoing development where functionality is expanded as needed. The input files are the xlsx-spreadsheets that can be exported from the BioLection software and a simple csv-file (see example) that describes the content of each well in the wellplate. 
 Current features include:
  - Support of both BioLector and BioLector Pro
+ - Combine data from multiple experiments
  - Plotting of any parameter (pH, DO, biomass) for:
    - Individual wells
    - Each strain / species across medium conditions
