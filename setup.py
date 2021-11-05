@@ -14,6 +14,7 @@ setup(
     author='Snorre sulheim',
     author_email='ssulheim@gmail.com',
     license='GPL-3.0',
+    package_dir={"": str("src")},
     packages=find_packages(where="src", include=["BioLector"]),
     install_requires=['pandas',                     
                       'seaborn',
