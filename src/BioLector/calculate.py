@@ -14,7 +14,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 def calculate_instant_growth_rates(df, well_id, param = "Biomass - 30", smooth_size = 5, method = "GAM", 
-                                   save_fn = None, lag_time = 5):
+                                   save_fn = None, lag_time = 4):
     """
     Returns a list consisting of growth rate in each time point for a given well.
     :param parameter: Name of the parameter (string), i.e. "Biomass - 30"
@@ -37,6 +37,7 @@ def calculate_instant_growth_rates(df, well_id, param = "Biomass - 30", smooth_s
         fig, ax = plt.subplots(1, figsize = (14, 8))
         ax.plot(t_arr, x_arr, label = "Data")
         ax.plot(t_smooth, x_smooth, label = "Fitted data")
+        print(save_fn)
         plt.savefig(save_fn)
         plt.close()
 
@@ -46,7 +47,7 @@ def calculate_instant_growth_rates(df, well_id, param = "Biomass - 30", smooth_s
     dt = t_smooth[1:] - t_smooth[:-1]
     return log_dx/dt, t_smooth[:-1]
 
-def calculate_max_growth_rate(df, well_id, param = "Biomass - 30", smooth_size = 5, method = "GAM", lag_time = 5):
+def calculate_max_growth_rate(df, well_id, param = "Biomass - 30", smooth_size = 5, method = "GAM", lag_time = 4):
     """
     Calculate the maximum growth rate based on instant growth rates. A lag-time is included to avoid the weird increase in growth rate often observed during the first few hours in data from the biolector
     """

@@ -34,7 +34,8 @@ well_N_to_fig_shape = {
 }
 
 class PlotResults(object):
-    def __init__(self, data_fn, wellmap_fn, fig_folder, experiment_name = None, pro_version = False, delimiter = ";"):
+    def __init__(self, data_fn, wellmap_fn, fig_folder, experiment_name = None, pro_version = False, 
+                 delimiter = ";", fig_format = "png"):
         # Store variables
         self.data_fn = data_fn
         self.delimiter = delimiter
@@ -47,6 +48,8 @@ class PlotResults(object):
         self.df, self.df_wellmap = self.add_wellmap_data(wellmap_fn, self.df, delimiter)
         self._set_wellplate_shape()
         self._add_experiment_name(experiment_name, self.df)
+
+        self.fig_format = fig_format
 
     def _set_pro_version(self, pro_version):
         self.pro_version = pro_version
@@ -152,11 +155,65 @@ class PlotResults(object):
         df = df.merge(df_wellmap, how='inner', left_on=self.well_column_name, right_on='Well')
         return df, df_wellmap
         
-    def plot_multiple_strains(self, strain_names = None, media = None):
+    def plot_multiple_strains(self, param = "Biomass - 30", strain_names = None, media = None, figsize = (14,8), 
+                              ci = 95, confidence_range = True, remove_contaminants = True, show = True):
         """
-        Compare multiple strains in the same plot, with the option of seing different media conditions as different line styles. 
+        Compare multiple strains in the same plot, with the option of seing different media conditions as different line styles.
+
+        Parameters
+        ----------
+        strain_names: list (optional, default None)
+            List of strains to include
+
+        media: list,
+            Lit of media to include in plot
         """
-        pass
+
+        # Select param values
+        idx = self.df["Parameter"] == param
+
+        if strain_names:
+            assert isinstance(strain_names, list)
+            idx = idx & self.df.Strain.isin(strain_names)
+        else:
+            strain_names = self.df.Strain.unique()
+
+        if isinstance(media, str):
+            media = [media]
+        elif media is None:
+            media = list(self.df.Medium.unique())
+
+        if confidence_range:
+            units = None
+            estimator = np.mean
+        else:
+            units="Replicate"
+            estimator = None
+
+        idx = idx & (self.df.Medium.isin(media))
+        
+        df_i = self.df.loc[idx, :]
+
+        fig, ax = plt.subplots(1, figsize = figsize)
+        graph = sns.lineplot(data = df_i, x = "Time [h]", y = "value", hue = "Strain", ax = ax, ci = ci, 
+                                style = "Medium", units = units, estimator = estimator)
+
+        # Move legend outside plot
+        graph.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+        # plt.subplots_adjust(left = 0.07, right = 0.75, top = 0.9)
+        plt.tight_layout()
+
+        # Style graph
+        ax.set(ylabel = param)
+        # ax.set_title(strain_name)
+        if confidence_range:
+            fig.text(0.1, 0.01, "Shaded regions display {0}% CI".format(ci))
+        fn = self.fig_folder / "{0}_{1}_{2}.{3}".format(param, "-".join(strain_names), "-".join(media), self.fig_format)
+        fig.savefig(fn)
+        if show:
+            plt.show()
+        plt.close()
+
 
     def get_cultivation_data(self, strain_name, param, medium = None, remove_contaminants = True):
         idx = (self.df["Parameter"] == param) & (self.df["Strain"]==strain_name)
@@ -171,7 +228,7 @@ class PlotResults(object):
 
         return df_i
 
-    def plot_strain_growth(self, strain_name, param = "Biomass - 30", fig_format = "svg", show = False, ci = 95, confidence_range = True, remove_contaminants = True, per_media = False, hue = "Medium", style = "Experiment", figsize = (14,8)):
+    def plot_strain_growth(self, strain_name, param = "Biomass - 30", show = False, ci = 95, confidence_range = True, remove_contaminants = True, per_media = False, hue = "Medium", style = "Experiment", figsize = (14,8)):
         """
         Plot the measured growth for all medium (conditions) for one strain / species
         """
@@ -239,7 +296,7 @@ class PlotResults(object):
                 ax.set_title("{0} - {1}".format(strain_name, medium))
                 if confidence_range:
                     fig.text(0.1, 0.01, "Shaded regions display {0}% CI".format(ci))
-                fn = self.fig_folder / "{0}_{1}_{3}.{2}".format(strain_name, param, fig_format, medium)
+                fn = self.fig_folder / "{0}_{1}_{3}.{2}".format(strain_name, param, self.fig_format, medium)
                 fig.savefig(fn)
                 if show:
                     plt.show()
@@ -261,7 +318,7 @@ class PlotResults(object):
             ax.set_title(strain_name)
             if confidence_range:
                 fig.text(0.1, 0.01, "Shaded regions display {0}% CI".format(ci))
-            fn = self.fig_folder / "{0}_{1}.{2}".format(strain_name, param, fig_format)
+            fn = self.fig_folder / "{0}_{1}.{2}".format(strain_name, param, self.fig_format)
             fig.savefig(fn)
             if show:
                 plt.show()
@@ -271,7 +328,7 @@ class PlotResults(object):
 
 
 
-    def plot_all_strains_growth(self, param = "Biomass - 50", fig_format = "svg", confidence_range = True, remove_contaminants = False, hue = "Medium", style = "Experiment", figsize = (14,8)):
+    def plot_all_strains_growth(self, param = "Biomass - 50", confidence_range = True, remove_contaminants = False, hue = "Medium", style = "Experiment", figsize = (14,8)):
         """
         Wrapper for the `plot_stain_growth` function that performs this action for all strains.
         """
@@ -285,7 +342,7 @@ class PlotResults(object):
             if not isinstance(strain, str):
                 continue
             print(strain)
-            self.plot_strain_growth(strain, param, fig_format, confidence_range = confidence_range, hue = hue,
+            self.plot_strain_growth(strain, param, confidence_range = confidence_range, hue = hue,
                                     style = style, figsize = figsize)
         return True
     def print_parameters(self):
@@ -300,7 +357,7 @@ class PlotResults(object):
         else:
             return True
 
-    def plot_wellplate(self, param = "Biomass - 50", fig_format = "svg", show = False, 
+    def plot_wellplate(self, param = "Biomass - 50", show = False, 
                         rolling_mean_window = 5, fold_change_ref = ("min", "max"), remove_contaminants = True):
         """
         Provide a wellplate plot showing the fold change.
@@ -355,14 +412,14 @@ class PlotResults(object):
         fig.suptitle("{0}: {1} gain".format(self.experiment_name, param))
 
         # Save fig
-        fn = self.fig_folder / "wellplate_{0}.{1}".format(param, fig_format)
+        fn = self.fig_folder / "wellplate_{0}.{1}".format(param, self.fig_format)
         fig.savefig(fn)
         if show:
             plt.show()
         plt.close()
         return True
 
-    def plot_individual_well_data(self, strain_name, param = "Biomass - 30", fig_format = "svg", show = False, pH_range = (6,8), DO_range = (50, 100)):
+    def plot_individual_well_data(self, strain_name, param = "Biomass - 30", show = False, pH_range = (6,8), DO_range = (50, 100)):
         """
         Plot DO, pH and Biomass for each well.
         """
@@ -473,25 +530,24 @@ class PlotResults(object):
         # sns.lineplot(data = df_i, x = "Time [h]", y = "value", hue = "Medium", ax = ax)
         # ax.set(ylabel = param)
         
-        fn = self.fig_folder / "all_data_{0}.{1}".format(strain_name, fig_format)
+        fn = self.fig_folder / "all_data_{0}.{1}".format(strain_name, self.fig_format)
         fig.savefig(fn)
         if show:
             plt.show()
         plt.close()
 
-    def plot_individual_well_data_all_strains(self, param = "Biomass - 30", fig_format = "svg", pH_range = (6,8), DO_range = (50, 100)):
+    def plot_individual_well_data_all_strains(self, param = "Biomass - 30", pH_range = (6,8), DO_range = (50, 100)):
         print("Plot data for each well")
 
         strains = self.df["Strain"].unique()
         for strain in strains:
             if not isinstance(strain, str):
                 continue
-            self.plot_individual_well_data(strain, param = param, fig_format = fig_format,
+            self.plot_individual_well_data(strain, param = param,
                  pH_range = pH_range, DO_range = DO_range)
 
 
-    def plot_instant_growth_rates(self, strain_names = None, param = "Biomass - 30", smooth_size = 5, 
-                                    fig_format = "png"):
+    def plot_instant_growth_rates(self, strain_names = None, param = "Biomass - 30", smooth_size = 5):
         """
         Plots the instant growth rate in each time point for a given well.
         :param parameter: Name of the parameter (string), i.e. "Biomass - 30"
@@ -518,7 +574,9 @@ class PlotResults(object):
             for (m, r, w) in df_strain.groupby(["Medium", "Replicate", "Well"]).groups.keys():
                 df = pd.DataFrame()
 
-                save_fn =  fitting_folder / "instant_growth_{0}_{1}_{2}.{3}".format(strain, m, w, fig_format)
+                save_key = "{0}_{1}_{2}".format(strain, m, w)
+                save_key = save_key.replace(". ", "_").replace(":", "_").replace(" ", "_")
+                save_fn =  fitting_folder / "instant_growth_{0}.{1}".format(save_key, self.fig_format)
                 growth_rate, t_arr = calculate.calculate_instant_growth_rates(self.df, w, param, smooth_size, 
                                                 save_fn = save_fn)
                 df["Growth rate"] = growth_rate
@@ -535,7 +593,7 @@ class PlotResults(object):
             ax.set_xlim(left = 0)
             ax.set_title(strain)
             plt.tight_layout()
-            fn = growth_rate_folder / "growth_rate_{0}.{1}".format(strain, fig_format)
+            fn = growth_rate_folder / "growth_rate_{0}.{1}".format(strain, self.fig_format)
             plt.savefig(fn)
             full_df["Strain"] = strain
             all_dfs.append(full_df)
@@ -546,7 +604,7 @@ class PlotResults(object):
         sns.relplot(data = df_all_strains, x = "Time [h]", y = "Growth rate", hue = "Medium", style = "Replicate", col = "Strain", col_wrap = 3, kind="line")
         # plt.tight_layout()
         # plt.show()
-        fn = growth_rate_folder / "instant_growth_rates_all_strains.{0}".format(fig_format)
+        fn = growth_rate_folder / "instant_growth_rates_all_strains.{0}".format(self.fig_format)
         plt.savefig(fn)
         plt.close()
 
@@ -614,7 +672,7 @@ if __name__ == '__main__':
     wellmap_fn = folder + "wellmap_U05_exp1.csv"
     fig_folder = "../../results/biolector_U05_exp1"
     B = PlotResults(fn, wellmap_fn, fig_folder, "Biolector U05-1")
-    # B.plot_all_strains_growth(fig_format = "svg", param = "Biomass - 30")
-    #B.plot_wellplate(fig_format = "svg", param = "Biomass - 30")
+    # B.plot_all_strains_growth(param = "Biomass - 30")
+    #B.plot_wellplate(param = "Biomass - 30")
     B.plot_individual_well_data(strain_name = "E. coli", param = "Biomass - 30")
 
