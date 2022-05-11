@@ -17,7 +17,7 @@ from pathlib import Path
 import copy
 import warnings
 
-import calculate
+from . import calculate
 
 plt.rcParams.update({'font.size':16})
 
