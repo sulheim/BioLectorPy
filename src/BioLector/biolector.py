@@ -547,7 +547,7 @@ class PlotResults(object):
                  pH_range = pH_range, DO_range = DO_range)
 
 
-    def plot_instant_growth_rates(self, strain_names = None, param = "Biomass - 30", smooth_size = 5):
+    def plot_instant_growth_rates(self, strain_names = None, param = "Biomass - 30", smooth_size = 5, method = "GAM"):
         """
         Plots the instant growth rate in each time point for a given well.
         :param parameter: Name of the parameter (string), i.e. "Biomass - 30"
@@ -566,6 +566,8 @@ class PlotResults(object):
 
         all_dfs = []
         for strain in strain_names:
+            if not isinstance(strain, str):
+                continue
             idx = (self.df["Parameter"] == param) & (self.df["Strain"]==strain)
             df_strain = self.df.loc[idx, :]
 
@@ -578,10 +580,11 @@ class PlotResults(object):
                 save_key = save_key.replace(". ", "_").replace(":", "_").replace(" ", "_")
                 save_fn =  fitting_folder / "instant_growth_{0}.{1}".format(save_key, self.fig_format)
                 growth_rate, t_arr = calculate.calculate_instant_growth_rates(self.df, w, param, smooth_size, 
-                                                save_fn = save_fn)
+                                                save_fn = save_fn, method = method)
                 df["Growth rate"] = growth_rate
                 df["Time [h]"] = t_arr
                 rate_dict[(m, r)] = df
+
             full_df = pd.concat(rate_dict, names = ["Medium", "Replicate", "old index"]).reset_index()
             full_df["Time [h]"] = full_df["Time [h]"].astype(float)
             full_df["Growth rate"] = full_df["Growth rate"].astype(float)
@@ -609,10 +612,15 @@ class PlotResults(object):
         plt.close()
 
 
-    def calculate_max_growth_rates(self, param = "Biomass - 30", lag_time = 5):
+    def calculate_max_growth_rates(self, param = "Biomass - 30", lag_time = 2, method = "regression", plot = False):
         rate_dict = {}
         for (s, m, r, w) in self.df.groupby(["Strain", "Medium", "Replicate", "Well"]).groups.keys():
-            max_gr = calculate.calculate_max_growth_rate(self.df, w, param, lag_time = lag_time)
+            if method == "regression":
+                max_gr = calculate.calculate_max_growth_rate_linear_regression(self.df, w, param,
+                                   n_blank = 3, p0 = (0.01, 0.5), plot = plot, lag_time = lag_time)
+            else:
+                max_gr = calculate.calculate_max_growth_rate(self.df, w, param, lag_time = lag_time)
+
             rate_dict[(s,m,r)] = max_gr
         df = pd.Series(rate_dict).reset_index()
         df.columns = ["Strain", "Medium", "Replicate", "Max growth rate"]
@@ -621,6 +629,7 @@ class PlotResults(object):
 
         fn = self.fig_folder / "growth_rates" / "estimated_growth_rates.csv"
         df_final.to_csv(fn)
+        print("Stored growth rates to {0}".format(fn))
         df_final.reset_index(inplace = True)
         fig, ax = plt.subplots(1, figsize = (14, 8))
         sns.heatmap(data = df_final.pivot("Strain", "Medium", "Max growth rate-mean"), annot = True, cmap = "Greens")
