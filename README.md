@@ -10,8 +10,10 @@ Current features include:
  - Well-plate plots summarizing results, e.g. in terms of max-growth rate, fold-increase etc.
  - Estimation of growth rates based on Generalized additive models
 
-# Installation
-pip install BioLectorPy
+# Installation and usage
+This is descibed in the wiki, read more there:
+- [Installation](https://github.com/sulheim/biolector/wiki#installation)
+- [Usage](https://github.com/sulheim/biolector/wiki#usage)
 
 # Contribution
 Feel free to contribute by rasing issues or PRs, or reach out to me directly at snorre.sulheim@sintef.no
