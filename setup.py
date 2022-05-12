@@ -18,7 +18,8 @@ setup(
     packages=find_packages(where="src", include=["BioLector"]),
     install_requires=['pandas',                     
                       'seaborn',
-                      'matplotlib'],
+                      'matplotlib',
+                      'pygam'],
 
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
